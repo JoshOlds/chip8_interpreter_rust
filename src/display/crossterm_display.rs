@@ -4,15 +4,10 @@ use crossterm::{
     terminal, ExecutableCommand, QueueableCommand, Result,
 };
 
+use crate::display::{Display, DisplayBuffer, DisplayMode};
 use std::io::Write;
 
-#[derive(Copy, Clone)]
-pub enum DisplayMode {
-    H64V32MONOCHROME,
-    H128V64MONOCHROME,
-}
-
-pub struct Display {
+pub struct CrossTermDisplay {
     mode: DisplayMode,
     h_res: usize,
     v_res: usize,
@@ -108,75 +103,5 @@ impl Display {
             return true;
         }
         false
-    }
-
-    pub fn write_sprite(&mut self, x: u8, y: u8, slice: &[u8]) -> bool {
-        let x = x as usize;
-        let y = y as usize;
-        let mut collision = false;
-        for (i, byte) in slice.iter().enumerate() {
-            if byte & 0x80 != 0 {
-                if Display::xor(&mut self.buffer[(y + i) % self.v_res][x % self.h_res], true) {
-                    collision = true;
-                };
-            }
-            if byte & 0x40 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 1) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-            if byte & 0x20 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 2) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-            if byte & 0x10 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 3) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-            if byte & 0x08 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 4) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-            if byte & 0x04 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 5) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-            if byte & 0x02 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 6) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-            if byte & 0x01 != 0 {
-                if Display::xor(
-                    &mut self.buffer[(y + i) % self.v_res][(x + 7) % self.h_res],
-                    true,
-                ) {
-                    collision = true;
-                };
-            }
-        }
-        collision
     }
 }
