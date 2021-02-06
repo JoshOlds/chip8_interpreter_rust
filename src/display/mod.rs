@@ -8,7 +8,7 @@ pub enum DisplayMode {
 
 impl DisplayMode {
     /// Returns the Horizontal Resolution, in pixels, of this DisplayMode
-    pub fn get_h_res(&self) -> u16 {
+    pub fn get_h_res(&self) -> i32 {
         match *self {
             DisplayMode::H64V32MONOCHROME => 64,
             DisplayMode::H128V64MONOCHROME => 128,
@@ -16,7 +16,7 @@ impl DisplayMode {
     }
 
     /// Returns the Vertical Resolution, in pixels, of this DisplayMode
-    pub fn get_v_res(&self) -> u16 {
+    pub fn get_v_res(&self) -> i32 {
         match *self {
             DisplayMode::H64V32MONOCHROME => 32,
             DisplayMode::H128V64MONOCHROME => 64,
@@ -29,20 +29,19 @@ pub trait Display {
     /// Returns the current DisplayMode of this Display
     fn get_display_mode(&self) -> DisplayMode;
     /// Sets the current DisplayMode of the Display
-    fn set_display_mode(&self, mode: DisplayMode);
+    fn set_display_mode(&mut self, mode: DisplayMode);
+    /// Gets a reference to the DisplayBuffer
+    fn get_display_buffer(&mut self) -> &mut DisplayBuffer;
     /// Draws the display buffer to the screen
-    fn draw(&self);
+    fn draw(&mut self);
     /// Clears the display (not the display buffer)
-    fn clear_screen(&self);
-    /// Clears the display buffer (not the screen)
-    fn clear_display_buffer(&self);
+    fn clear_screen(&mut self);
     /// Hides the display
-    fn hide(&self);
-    /// Gets a reference to the DisplayBuffer of this Display
-    fn get_buffer(&self) -> &DisplayBuffer;
+    fn hide(&mut self);
 }
 
 /// Wrapper for Display buffer memory. Includes helper methods for working with display memory.
+#[derive(Copy, Clone)]
 pub struct DisplayBuffer {
     /// 2D array that matches size of the screen resolution.
     /// First dimension (ie. [buff[y]] ) is the row (vertical dimension)
@@ -62,16 +61,27 @@ impl DisplayBuffer {
         }
     }
 
+    /// Clears the display buffer (sets all values to false)
+    pub fn clear(&mut self) {
+        self.buff = [[false; 128]; 64];
+    }
+
     /// Sets a pixel on the DisplayBuffer to ON (true). If the pixel being set is already on (true),
     /// then a collision has occurred. Settings pixels off-screen (outside resolution bounds), will
     /// cause the pixel coordinates to roll-over.
     /// Returns true when a collision has occurred.
-    pub fn set_pixel(&mut self, x: u8, y: u8) -> bool {
+    pub fn set_pixel(&mut self, x: i32, y: i32) -> bool {
         // Normalize (roll over) pixel values into resolution range
-        let x = x % self.display_mode.get_h_res();
-        let y = y % self.display_mode.get_v_res();
+        let mut x = x % self.display_mode.get_h_res();
+        let mut y = y % self.display_mode.get_v_res();
+        if x < 0 {
+            x += self.display_mode.get_h_res();
+        }
+        if y < 0 {
+            y += self.display_mode.get_v_res();
+        }
 
-        let pixel: &mut bool = &mut self.buff[y][x];
+        let pixel: &mut bool = &mut self.buff[y as usize][x as usize];
         // Pixel is already on
         return if *pixel {
             *pixel = false;
@@ -84,10 +94,12 @@ impl DisplayBuffer {
         };
     }
 
-    pub fn write_sprite(&mut self, x: u8, y: u8, sprite_slice: &[u8]) -> bool {
+    pub fn write_sprite(&mut self, x: i32, y: i32, sprite_slice: &[u8]) -> bool {
         let mut collision = false;
 
         for (i, byte) in sprite_slice.iter().enumerate() {
+            let i = i as i32;
+
             if byte & 0x80 != 0 {
                 if self.set_pixel(x, y + i) {
                     collision = true;

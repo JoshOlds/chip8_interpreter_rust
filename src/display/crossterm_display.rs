@@ -1,107 +1,104 @@
+use crate::display::{Display, DisplayBuffer, DisplayMode};
 use crossterm::{
     cursor,
     style::{self, Colorize},
     terminal, ExecutableCommand, QueueableCommand, Result,
 };
-
-use crate::display::{Display, DisplayBuffer, DisplayMode};
 use std::io::Write;
 
+/// Chip-8 Display interface object that uses CrossTerm as its concrete implementation.
 pub struct CrossTermDisplay {
-    mode: DisplayMode,
-    h_res: usize,
-    v_res: usize,
-    h_bytes: usize,
+    /// Display buffer used to draw the screen
+    display_buffer: DisplayBuffer,
+    /// Handle to standard output for writing to terminal
     stdout: std::io::Stdout,
+    /// Content style object for formatting terminal output
     term_char: style::StyledContent<char>,
-    pub buffer: [[bool; 64]; 32],
 }
 
-impl Display {
-    pub fn new(mode: DisplayMode) -> Display {
-        match mode {
-            DisplayMode::H64V32MONOCHROME => Display {
-                mode: mode,
-                h_res: 64,
-                v_res: 32,
-                h_bytes: 64 / 8,
-                stdout: std::io::stdout(),
-                term_char: style::style('*').with(style::Color::Green),
-                buffer: [[false; 64]; 32],
-            },
-            DisplayMode::H128V64MONOCHROME => Display {
-                mode: mode,
-                h_res: 128,
-                v_res: 64,
-                h_bytes: 128 / 8,
-                stdout: std::io::stdout(),
-                term_char: style::style('*').with(style::Color::Green),
-                buffer: [[false; 64]; 32],
-            },
-        }
+impl Display for CrossTermDisplay {
+    fn get_display_mode(&self) -> DisplayMode {
+        self.display_buffer.display_mode
     }
 
-    pub fn get_mode(&self) -> DisplayMode {
-        self.mode
+    fn set_display_mode(&mut self, mode: DisplayMode) {
+        self.display_buffer.display_mode = mode;
     }
 
-    pub fn get_screen_size(&self) -> (usize, usize) {
-        (self.h_res, self.v_res)
+    fn get_display_buffer(&mut self) -> &mut DisplayBuffer {
+        return &mut self.display_buffer;
     }
 
-    pub fn setup_terminal(&mut self) -> Result<()> {
+    fn draw(&mut self) {
+        // Align cursor to start
+        self.stdout.queue(cursor::MoveTo(0, 0)).unwrap();
         self.stdout
-            .queue(terminal::SetSize(self.h_res as u16, self.v_res as u16))?
+            .queue(terminal::Clear(terminal::ClearType::All))
+            .unwrap();
+
+        // Iterate over the display buffer and draw
+        for (col, vbuf) in self.display_buffer.buff.iter().enumerate() {
+            for (row, pixel) in vbuf.iter().enumerate() {
+                // Write pixel data
+                if *pixel {
+                    self.stdout
+                        .queue(style::PrintStyledContent(self.term_char))
+                        .unwrap();
+                } else {
+                    self.stdout.queue(cursor::MoveRight(1)).unwrap();
+                }
+            }
+            self.stdout.queue(cursor::MoveToColumn(0)).unwrap();
+            self.stdout.queue(cursor::MoveDown(1)).unwrap();
+        }
+
+        self.stdout.flush().unwrap();
+    }
+
+    fn clear_screen(&mut self) {
+        self.stdout
+            .queue(terminal::Clear(terminal::ClearType::All))
+            .unwrap();
+        self.stdout.flush().unwrap();
+    }
+
+    fn hide(&mut self) {
+        unimplemented!()
+    }
+}
+
+impl CrossTermDisplay {
+    /// Constructs a new CrossTermDisplay. RAII, formats the terminal display upon construction.
+    pub fn new(mode: DisplayMode) -> CrossTermDisplay {
+        let mut new = CrossTermDisplay {
+            display_buffer: DisplayBuffer::new(mode),
+            stdout: std::io::stdout(),
+            term_char: style::style('*').with(style::Color::Green),
+        };
+        // TODO: Actually handle failure to setup terminal
+        new.setup_terminal().unwrap();
+        return new;
+    }
+
+    /// Sets the character and color for the terminal
+    pub fn set_pixel_character(&mut self, character: char, color: style::Color) {
+        self.term_char = style::style(character).with(color);
+    }
+
+    /// Configures the display. Resizes terminal, disables blinking, sets cursor, etc.
+    fn setup_terminal(&mut self) -> Result<()> {
+        terminal::enable_raw_mode().unwrap();
+        self.stdout
+            .queue(terminal::SetSize(
+                self.display_buffer.display_mode.get_h_res() as u16,
+                self.display_buffer.display_mode.get_v_res() as u16,
+            ))?
             .queue(cursor::DisableBlinking)?
             .queue(cursor::Hide)?
             .queue(terminal::Clear(terminal::ClearType::All))?
             .queue(cursor::MoveTo(0, 0))?;
 
-        self.stdout.flush()?;
+        self.stdout.flush();
         Ok(())
-    }
-
-    pub fn draw(&mut self) -> Result<()> {
-        // Align cursor to start
-        self.stdout.queue(cursor::MoveTo(0, 0))?;
-        self.stdout
-            .queue(terminal::Clear(terminal::ClearType::All))?;
-
-        for (col, vbuf) in self.buffer.iter().enumerate() {
-            for (row, pixel) in vbuf.iter().enumerate() {
-                // Write pixel data
-                if *pixel {
-                    self.stdout
-                        .queue(style::PrintStyledContent(self.term_char))?;
-                } else {
-                    self.stdout.queue(cursor::MoveRight(1))?;
-                }
-            }
-            self.stdout.queue(cursor::MoveToColumn(0))?;
-            self.stdout.queue(cursor::MoveDown(1))?;
-        }
-
-        self.stdout.flush()?;
-        Ok(())
-    }
-
-    pub fn clear(&mut self) {
-        for vbuf in self.buffer.iter_mut() {
-            for pixel in vbuf.iter_mut() {
-                *pixel = false;
-            }
-        }
-    }
-
-    fn xor(operand: &mut bool, value: bool) -> bool {
-        if !*operand && value {
-            *operand = true;
-            return false;
-        }
-        if *operand && value {
-            *operand = false;
-            return true;
-        }
-        false
     }
 }
