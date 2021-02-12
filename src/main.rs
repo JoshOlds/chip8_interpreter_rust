@@ -1,17 +1,23 @@
 // Modules
 mod cpu;
 mod display;
-mod keyboard;
+mod input;
 mod memory;
 
 // Core libraries
 use crate::cpu::CPU;
 use crate::display::{Display, DisplayBuffer, DisplayMode};
-use crate::keyboard::Keyboard;
+use crate::input::{ChipKeys, Input};
 use crate::memory::Memory;
 
-// Displays
+// Concrete Displays
 use crate::display::crossterm_display::CrossTermDisplay;
+
+// Concrete Inputs
+use crate::input::crossterm_input::CrosstermInput;
+use crate::input::ChipKeys::Key5;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn main() {
     keyboard_test()
@@ -22,8 +28,7 @@ fn keyboard_test() {
     cpu.mem.load_ascii_fonts();
 
     let mut display = CrossTermDisplay::new(DisplayMode::H64V32MONOCHROME);
-
-    let mut keyboard = Keyboard::new();
+    let mut system_input = CrosstermInput::new(0);
 
     let vres = display.get_display_mode().get_v_res();
     let hres = display.get_display_mode().get_h_res();
@@ -31,21 +36,24 @@ fn keyboard_test() {
     let mut y = vres / 2;
 
     loop {
-        keyboard.update(1000);
+        let mut input = &mut system_input;
 
-        if keyboard.key_5 {
+        input.update();
+        let keys = input.get_active_inputs();
+
+        if keys.contains(&ChipKeys::Key5) {
             y = ((y - 1) % vres);
         }
-        if keyboard.key_7 {
+        if keys.contains(&ChipKeys::Key7) {
             x = ((x - 1) % hres);
         }
-        if keyboard.key_8 {
+        if keys.contains(&ChipKeys::Key8) {
             y = ((y + 1) % vres);
         }
-        if keyboard.key_9 {
+        if keys.contains(&ChipKeys::Key9) {
             x = ((x + 1) % hres);
         }
-        if keyboard.key_esc {
+        if keys.contains(&ChipKeys::ESC) {
             return;
         }
 
@@ -56,6 +64,7 @@ fn keyboard_test() {
         }
         display.clear_screen();
         display.draw();
+        sleep(Duration::from_millis(16));
     }
 }
 
