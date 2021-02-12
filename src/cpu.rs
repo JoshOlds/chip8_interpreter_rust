@@ -1,5 +1,11 @@
 use crate::memory::Memory;
 
+use crate::display::crossterm_display::CrossTermDisplay;
+use crate::display::{Display, DisplayMode};
+use crate::input::crossterm_input::CrosstermInput;
+use crate::input::Input;
+use std::time::{Duration, Instant};
+
 /// Chip-8 CPU. Contains all Registers and Memory included in the CHIP-8 System.
 pub struct CPU {
     /// Memory the CPU is operating on
@@ -20,10 +26,20 @@ pub struct CPU {
     pub stack_reg: u8,
     /// Video Register - Single 8-bit register. Set to 1 by interpreter if a pixel collision occurs
     pub vf_reg: u8,
+
+    /// Timestamp used to track delay register update
+    pub delay_reg_timestamp: Instant,
+    /// Timestamp used to track sound register update
+    pub sound_register_timestamp: Instant,
+
+    /// Reference to a Display
+    pub display_reference: Box<dyn Display>,
+    /// Reference to an Input
+    pub input_reference: Box<dyn Input>,
 }
 
 impl CPU {
-    pub fn new() -> CPU {
+    pub fn new(display_reference: Box<dyn Display>, input_reference: Box<dyn Input>) -> CPU {
         CPU {
             mem: Memory::new(),
             stack: [0; 16],
@@ -34,6 +50,26 @@ impl CPU {
             pc_reg: 0,
             stack_reg: 0,
             vf_reg: 0,
+            delay_reg_timestamp: Instant::now(),
+            sound_register_timestamp: Instant::now(),
+            display_reference,
+            input_reference,
+        }
+    }
+
+    /// Checks if it is time to decrement the delay and sound register (60hz)
+    pub fn update_time_registers(&mut self) {
+        if self.delay_reg > 0 {
+            if self.delay_reg_timestamp.elapsed() > Duration::from_micros(16666) {
+                self.delay_reg -= 1;
+                self.delay_reg_timestamp = Instant::now();
+            }
+        }
+        if self.sound_reg > 0 {
+            if self.sound_register_timestamp.elapsed() > Duration::from_micros(16666) {
+                self.sound_reg -= 1;
+                self.sound_register_timestamp = Instant::now();
+            }
         }
     }
 }

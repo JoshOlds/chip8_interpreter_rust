@@ -2,6 +2,7 @@
 mod cpu;
 mod display;
 mod input;
+mod instructions;
 mod memory;
 
 // Core libraries
@@ -24,22 +25,20 @@ fn main() {
 }
 
 fn keyboard_test() {
-    let mut cpu = CPU::new();
-    cpu.mem.load_ascii_fonts();
-
     let mut display = CrossTermDisplay::new(DisplayMode::H64V32MONOCHROME);
     let mut system_input = CrosstermInput::new(0);
 
-    let vres = display.get_display_mode().get_v_res();
-    let hres = display.get_display_mode().get_h_res();
+    let mut cpu = CPU::new(Box::new(display), Box::new(system_input));
+    cpu.mem.load_ascii_fonts();
+
+    let vres = cpu.display_reference.get_display_mode().get_v_res();
+    let hres = cpu.display_reference.get_display_mode().get_h_res();
     let mut x = hres / 2;
     let mut y = vres / 2;
 
     loop {
-        let mut input = &mut system_input;
-
-        input.update();
-        let keys = input.get_active_inputs();
+        cpu.input_reference.update();
+        let keys = cpu.input_reference.get_active_inputs();
 
         if keys.contains(&ChipKeys::Key5) {
             y = ((y - 1) % vres);
@@ -58,12 +57,12 @@ fn keyboard_test() {
         }
 
         {
-            let display_buffer = display.get_display_buffer();
+            let display_buffer = cpu.display_reference.get_display_buffer();
             display_buffer.clear();
             display_buffer.write_sprite(x, y, cpu.mem.get_ascii_slice(0xF).unwrap());
         }
-        display.clear_screen();
-        display.draw();
+        cpu.display_reference.clear_screen();
+        cpu.display_reference.draw();
         sleep(Duration::from_millis(16));
     }
 }
