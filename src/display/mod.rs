@@ -24,16 +24,10 @@ impl DisplayMode {
     }
 }
 
-/// CHIP-8 Display interface
+/// CHIP-8 Display Trait
 pub trait Display {
-    /// Returns the current DisplayMode of this Display
-    fn get_display_mode(&self) -> DisplayMode;
-    /// Sets the current DisplayMode of the Display
-    fn set_display_mode(&mut self, mode: DisplayMode);
-    /// Gets a reference to the DisplayBuffer
-    fn get_display_buffer(&mut self) -> &mut DisplayBuffer;
     /// Draws the display buffer to the screen
-    fn draw(&mut self);
+    fn draw(&mut self, display_buffer: &DisplayBuffer);
     /// Clears the display (not the display buffer)
     fn clear_screen(&mut self);
     /// Hides the display
@@ -59,6 +53,10 @@ impl DisplayBuffer {
             buff: [[false; 128]; 64],
             display_mode: mode,
         }
+    }
+
+    pub fn get_display_mode(&self) -> DisplayMode {
+        return self.display_mode;
     }
 
     /// Clears the display buffer (sets all values to false)

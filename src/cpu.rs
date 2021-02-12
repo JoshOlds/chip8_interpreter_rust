@@ -1,9 +1,7 @@
 use crate::memory::Memory;
 
-use crate::display::crossterm_display::CrossTermDisplay;
-use crate::display::{Display, DisplayMode};
-use crate::input::crossterm_input::CrosstermInput;
-use crate::input::Input;
+use crate::display::{DisplayBuffer, DisplayMode};
+use crate::input::Keyboard;
 use std::time::{Duration, Instant};
 
 /// Chip-8 CPU. Contains all Registers and Memory included in the CHIP-8 System.
@@ -23,7 +21,7 @@ pub struct CPU {
     /// Program Counter - Single 16-bit register that points to the current memory instruction
     pub pc_reg: u16,
     /// Stack Register - Single 8-bit register that points to the address of the top of the stack.
-    pub stack_reg: u8,
+    pub stack_pointer_reg: u8,
     /// Video Register - Single 8-bit register. Set to 1 by interpreter if a pixel collision occurs
     pub vf_reg: u8,
 
@@ -32,14 +30,14 @@ pub struct CPU {
     /// Timestamp used to track sound register update
     pub sound_register_timestamp: Instant,
 
-    /// Reference to a Display
-    pub display_reference: Box<dyn Display>,
-    /// Reference to an Input
-    pub input_reference: Box<dyn Input>,
+    /// Display Buffer of this CPU
+    pub display_buffer: DisplayBuffer,
+    /// Keyboard linked to CPU
+    pub keyboard: Keyboard,
 }
 
 impl CPU {
-    pub fn new(display_reference: Box<dyn Display>, input_reference: Box<dyn Input>) -> CPU {
+    pub fn new(display_mode: DisplayMode) -> CPU {
         CPU {
             mem: Memory::new(),
             stack: [0; 16],
@@ -48,12 +46,12 @@ impl CPU {
             delay_reg: 0,
             sound_reg: 0,
             pc_reg: 0,
-            stack_reg: 0,
+            stack_pointer_reg: 0,
             vf_reg: 0,
             delay_reg_timestamp: Instant::now(),
             sound_register_timestamp: Instant::now(),
-            display_reference,
-            input_reference,
+            display_buffer: DisplayBuffer::new(display_mode),
+            keyboard: Keyboard::new(),
         }
     }
 

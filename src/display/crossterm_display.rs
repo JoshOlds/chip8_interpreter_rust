@@ -8,8 +8,6 @@ use std::io::Write;
 
 /// Chip-8 Display interface object that uses CrossTerm as its concrete implementation.
 pub struct CrossTermDisplay {
-    /// Display buffer used to draw the screen
-    display_buffer: DisplayBuffer,
     /// Handle to standard output for writing to terminal
     stdout: std::io::Stdout,
     /// Content style object for formatting terminal output
@@ -17,19 +15,7 @@ pub struct CrossTermDisplay {
 }
 
 impl Display for CrossTermDisplay {
-    fn get_display_mode(&self) -> DisplayMode {
-        self.display_buffer.display_mode
-    }
-
-    fn set_display_mode(&mut self, mode: DisplayMode) {
-        self.display_buffer.display_mode = mode;
-    }
-
-    fn get_display_buffer(&mut self) -> &mut DisplayBuffer {
-        return &mut self.display_buffer;
-    }
-
-    fn draw(&mut self) {
+    fn draw(&mut self, display_buffer: &DisplayBuffer) {
         // Align cursor to start
         self.stdout.queue(cursor::MoveTo(0, 0)).unwrap();
         self.stdout
@@ -37,7 +23,7 @@ impl Display for CrossTermDisplay {
             .unwrap();
 
         // Iterate over the display buffer and draw
-        for (col, vbuf) in self.display_buffer.buff.iter().enumerate() {
+        for (col, vbuf) in display_buffer.buff.iter().enumerate() {
             for (row, pixel) in vbuf.iter().enumerate() {
                 // Write pixel data
                 if *pixel {
@@ -69,29 +55,28 @@ impl Display for CrossTermDisplay {
 
 impl CrossTermDisplay {
     /// Constructs a new CrossTermDisplay. RAII, formats the terminal display upon construction.
-    pub fn new(mode: DisplayMode) -> CrossTermDisplay {
+    pub fn new(mode: &DisplayMode) -> CrossTermDisplay {
         let mut new = CrossTermDisplay {
-            display_buffer: DisplayBuffer::new(mode),
             stdout: std::io::stdout(),
             term_char: style::style('*').with(style::Color::Green),
         };
         // TODO: Actually handle failure to setup terminal
-        new.setup_terminal().unwrap();
+        new.setup_terminal(&mode).unwrap();
         return new;
     }
 
     /// Sets the character and color for the terminal
-    pub fn set_pixel_character(&mut self, character: char, color: style::Color) {
-        self.term_char = style::style(character).with(color);
+    pub fn set_term_character(&mut self, character: &char, color: &style::Color) {
+        self.term_char = style::style(*character).with(*color);
     }
 
     /// Configures the display. Resizes terminal, disables blinking, sets cursor, etc.
-    fn setup_terminal(&mut self) -> Result<()> {
+    fn setup_terminal(&mut self, display_mode: &DisplayMode) -> Result<()> {
         terminal::enable_raw_mode().unwrap();
         self.stdout
             .queue(terminal::SetSize(
-                self.display_buffer.display_mode.get_h_res() as u16,
-                self.display_buffer.display_mode.get_v_res() as u16,
+                display_mode.get_h_res() as u16,
+                display_mode.get_v_res() as u16,
             ))?
             .queue(cursor::DisableBlinking)?
             .queue(cursor::Hide)?

@@ -2,11 +2,8 @@ pub mod crossterm_input;
 
 /// Trait to abstract CHIP-8 System input
 pub trait Input {
-    /// Returns a vector of all active (pressed) keys
-    fn get_active_inputs(&self) -> Vec<ChipKeys>;
-
-    /// Updates (reads) all key values
-    fn update(&mut self);
+    /// Updates (reads) all key values and updates the given keyboard object
+    fn update(&mut self, keyboard: &mut Keyboard);
 }
 
 const NUMBER_OF_KEYS: usize = 17;
