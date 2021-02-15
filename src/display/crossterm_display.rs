@@ -7,14 +7,14 @@ use crossterm::{
 use std::io::Write;
 
 /// Chip-8 Display interface object that uses CrossTerm as its concrete implementation.
-pub struct CrossTermDisplay {
+pub struct CrosstermDisplay {
     /// Handle to standard output for writing to terminal
     stdout: std::io::Stdout,
     /// Content style object for formatting terminal output
     term_char: style::StyledContent<char>,
 }
 
-impl Display for CrossTermDisplay {
+impl Display for CrosstermDisplay {
     fn draw(&mut self, display_buffer: &DisplayBuffer) {
         // Align cursor to start
         self.stdout.queue(cursor::MoveTo(0, 0)).unwrap();
@@ -53,10 +53,10 @@ impl Display for CrossTermDisplay {
     }
 }
 
-impl CrossTermDisplay {
+impl CrosstermDisplay {
     /// Constructs a new CrossTermDisplay. RAII, formats the terminal display upon construction.
-    pub fn new(mode: &DisplayMode) -> CrossTermDisplay {
-        let mut new = CrossTermDisplay {
+    pub fn new(mode: &DisplayMode) -> CrosstermDisplay {
+        let mut new = CrosstermDisplay {
             stdout: std::io::stdout(),
             term_char: style::style('*').with(style::Color::Green),
         };

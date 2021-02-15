@@ -4,6 +4,7 @@ mod display;
 mod input;
 mod instructions;
 mod memory;
+mod rom_loader;
 
 // Core libraries
 use crate::cpu::CPU;
@@ -12,7 +13,7 @@ use crate::input::{ChipKeys, Input};
 use crate::memory::Memory;
 
 // Concrete Displays
-use crate::display::crossterm_display::CrossTermDisplay;
+use crate::display::crossterm_display::CrosstermDisplay;
 
 // Concrete Inputs
 use crate::input::crossterm_input::CrosstermInput;
@@ -21,11 +22,31 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn main() {
-    keyboard_test()
+    //keyboard_test()
+
+    let mut display = CrosstermDisplay::new(&DisplayMode::H64V32MONOCHROME);
+    let mut system_input = CrosstermInput::new(0);
+
+    let mut cpu = CPU::new(DisplayMode::H64V32MONOCHROME);
+    cpu.mem.load_ascii_fonts();
+
+    //rom_loader::load_rom_file(&mut cpu, "roms/IBM_Logo.ch8").unwrap();
+    rom_loader::load_rom_file(&mut cpu, "roms/test_opcode.ch8").unwrap();
+    cpu.pc_reg = 0x200;
+
+    loop {
+        system_input.update(&mut cpu.keyboard);
+        if cpu.keyboard.esc {
+            return;
+        }
+        if instructions::execute(&mut cpu) {
+            display.draw(&cpu.display_buffer);
+        }
+    }
 }
 
 fn keyboard_test() {
-    let mut display = CrossTermDisplay::new(&DisplayMode::H64V32MONOCHROME);
+    let mut display = CrosstermDisplay::new(&DisplayMode::H64V32MONOCHROME);
     let mut system_input = CrosstermInput::new(0);
 
     let mut cpu = CPU::new(DisplayMode::H64V32MONOCHROME);

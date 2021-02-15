@@ -1,6 +1,8 @@
 use crate::cpu::CPU;
 
 use rand::prelude::*;
+use std::borrow::Borrow;
+
 /// Documentation pulled from CowGod's CHIP-8 Reference page
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 ///
@@ -12,6 +14,94 @@ use rand::prelude::*;
 // x - A 4-bit value, the lower 4 bits of the high byte of the instruction
 // y - A 4-bit value, the upper 4 bits of the low byte of the instruction
 // kk or byte - An 8-bit value, the lowest 8 bits of the instruction
+
+/// Helper function to combine three nibbles into a 12-bit value
+pub fn to_nnn(first: &u8, second: &u8, third: &u8) -> u16 {
+    let nnn: u16 = ((*first as u16) << 8) + ((*second as u16) << 4) + *third as u16;
+    nnn
+}
+
+pub fn to_kk(first: &u8, second: &u8) -> u8 {
+    let kk: u8 = (*first << 4) + *second;
+    kk
+}
+
+pub fn execute(cpu: &mut CPU) -> bool {
+    // Fetch instruction
+    // Split the 2-byte instruction into four nibbles
+    let first = (cpu.mem.mem[cpu.pc_reg as usize] & 0xF0) >> 4;
+    let second = cpu.mem.mem[cpu.pc_reg as usize] & 0x0F;
+    let third = (cpu.mem.mem[(cpu.pc_reg + 1) as usize] & 0xF0) >> 4;
+    let fourth = cpu.mem.mem[(cpu.pc_reg + 1) as usize] & 0x0F;
+
+    // Increment the program counter
+    cpu.pc_reg += 2;
+
+    // Decode instruction based on first nibble
+    match first {
+        0x0 => {
+            if third == 0xE {
+                if fourth == 0x0 {
+                    cls(cpu);
+                } else if fourth == 0xE {
+                    ret(cpu);
+                }
+            } else {
+                sys(to_nnn(&second, &third, &fourth));
+            }
+        }
+        0x1 => jump(cpu, to_nnn(&second, &third, &fourth)),
+        0x2 => call(cpu, to_nnn(&second, &third, &fourth)),
+        0x3 => skip_equal(cpu, second, to_kk(&third, &fourth)),
+        0x4 => skip_not_equal(cpu, second, to_kk(&third, &fourth)),
+        0x5 => skip_equal_xy(cpu, second, third),
+        0x6 => load(cpu, second, to_kk(&third, &fourth)),
+        0x7 => add(cpu, second, to_kk(&third, &fourth)),
+        0x8 => match fourth {
+            0x0 => load_xy(cpu, second, third),
+            0x1 => bitwise_or(cpu, second, third),
+            0x2 => bitwise_and(cpu, second, third),
+            0x3 => bitwise_xor(cpu, second, third),
+            0x4 => add_xy(cpu, second, third),
+            0x5 => sub_xy(cpu, second, third),
+            0x6 => shift_right(cpu, second), // TODO: Variant of this opcode
+            0x7 => sub_yx(cpu, second, third),
+            0xE => shift_left(cpu, second), // TODO: Variant of this opcode
+            _ => {
+                panic!("Unsupported instruction!");
+            }
+        },
+        0x9 => skip_not_equal_xy(cpu, second, third),
+        0xA => load_i(cpu, to_nnn(&second, &third, &fourth)),
+        0xB => jump_v0(cpu, to_nnn(&second, &third, &fourth)),
+        0xC => rand(cpu, second, to_kk(&third, &fourth)),
+        0xD => {
+            draw(cpu, second, third, fourth);
+            return true;
+        }
+        0xE => match to_kk(&third, &fourth) {
+            0x9E => skip_if_key(cpu, second),
+            0xA1 => skip_not_key(cpu, second),
+            _ => panic!("Unsupported Instruction!"),
+        },
+        0xF => match to_kk(&third, &fourth) {
+            0x07 => load_delay_timer(cpu, second),
+            0x0A => wait_for_key(cpu, second),
+            0x15 => load_delay_to_vx(cpu, second),
+            0x18 => load_sound_timer(cpu, second),
+            0x1E => add_i_vx(cpu, second),
+            0x29 => load_ascii_address(cpu, second),
+            0x33 => load_bcd(cpu, second),
+            0x55 => store_regs(cpu, second),
+            0x65 => load_regs(cpu, second),
+            _ => panic!("Unsupported Instruction!"),
+        },
+        _ => {
+            panic!("Unsupported instruction!");
+        }
+    }
+    false
+}
 
 /// 0nnn - SYS addr
 /// Jump to a machine code routine at nnn.
@@ -26,7 +116,6 @@ pub fn sys(_nnn: u16) {
 /// Clear the display.
 pub fn cls(cpu: &mut CPU) {
     cpu.display_buffer.clear();
-    cpu.pc_reg += 1;
 }
 
 ///00EE - RET
@@ -66,8 +155,6 @@ pub fn call(cpu: &mut CPU, nnn: u16) {
 pub fn skip_equal(cpu: &mut CPU, vx: u8, kk: u8) {
     if cpu.gp_regs[vx as usize] == kk {
         cpu.pc_reg += 2;
-    } else {
-        cpu.pc_reg += 1;
     }
 }
 
@@ -79,8 +166,6 @@ pub fn skip_equal(cpu: &mut CPU, vx: u8, kk: u8) {
 pub fn skip_not_equal(cpu: &mut CPU, vx: u8, kk: u8) {
     if cpu.gp_regs[vx as usize] != kk {
         cpu.pc_reg += 2;
-    } else {
-        cpu.pc_reg += 1;
     }
 }
 
@@ -92,8 +177,6 @@ pub fn skip_not_equal(cpu: &mut CPU, vx: u8, kk: u8) {
 pub fn skip_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     if cpu.gp_regs[vx as usize] == cpu.gp_regs[vy as usize] {
         cpu.pc_reg += 2;
-    } else {
-        cpu.pc_reg += 1;
     }
 }
 
@@ -103,7 +186,6 @@ pub fn skip_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
 /// The interpreter puts the value kk into register Vx.
 pub fn load(cpu: &mut CPU, vx: u8, kk: u8) {
     cpu.gp_regs[vx as usize] = kk;
-    cpu.pc_reg += 1;
 }
 
 /// 7xkk - ADD Vx, byte
@@ -111,8 +193,8 @@ pub fn load(cpu: &mut CPU, vx: u8, kk: u8) {
 ///
 /// Adds the value kk to the value of register Vx, then stores the result in Vx.
 pub fn add(cpu: &mut CPU, vx: u8, kk: u8) {
-    cpu.gp_regs[vx as usize] += kk;
-    cpu.pc_reg += 1;
+    let sum = cpu.gp_regs[vx as usize].overflowing_add(kk).0;
+    cpu.gp_regs[vx as usize] = sum;
 }
 
 ///8xy0 - LD Vx, Vy
@@ -121,7 +203,6 @@ pub fn add(cpu: &mut CPU, vx: u8, kk: u8) {
 /// Stores the value of register Vy in register Vx.
 pub fn load_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize];
-    cpu.pc_reg += 1;
 }
 
 ///8xy1 - OR Vx, Vy
@@ -132,7 +213,6 @@ pub fn load_xy(cpu: &mut CPU, vx: u8, vy: u8) {
 /// result is also 1. Otherwise, it is 0.
 pub fn bitwise_or(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] | cpu.gp_regs[vx as usize];
-    cpu.pc_reg += 1;
 }
 
 ///8xy2 - AND Vx, Vy
@@ -143,7 +223,6 @@ pub fn bitwise_or(cpu: &mut CPU, vx: u8, vy: u8) {
 /// result is also 1. Otherwise, it is 0.
 pub fn bitwise_and(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] & cpu.gp_regs[vx as usize];
-    cpu.pc_reg += 1;
 }
 
 /// 8xy3 - XOR Vx, Vy
@@ -154,7 +233,6 @@ pub fn bitwise_and(cpu: &mut CPU, vx: u8, vy: u8) {
 /// same, then the corresponding bit in the result is set to 1. Otherwise, it is 0.
 pub fn bitwise_xor(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] ^ cpu.gp_regs[vx as usize];
-    cpu.pc_reg += 1;
 }
 
 /// 8xy4 - ADD Vx, Vy
@@ -166,13 +244,12 @@ pub fn add_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     let mut sum: u16 = cpu.gp_regs[vy as usize] as u16 + cpu.gp_regs[vx as usize] as u16;
     let carry = sum > 255;
     if carry {
-        sum -= 255;
+        sum -= 256;
         cpu.vf_reg = 1;
     } else {
         cpu.vf_reg = 0;
     }
     cpu.gp_regs[vx as usize] = sum as u8;
-    cpu.pc_reg += 1;
 }
 
 /// 8xy5 - SUB Vx, Vy
@@ -186,8 +263,10 @@ pub fn sub_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     } else {
         cpu.vf_reg = 0;
     }
-    cpu.gp_regs[vx as usize] = cpu.gp_regs[vx as usize] - cpu.gp_regs[vy as usize];
-    cpu.pc_reg += 1;
+    let mut diff = cpu.gp_regs[vx as usize]
+        .overflowing_sub(cpu.gp_regs[vy as usize])
+        .0;
+    cpu.gp_regs[vx as usize] = diff;
 }
 
 /// 8xy6 - SHR Vx {, Vy}
@@ -203,7 +282,6 @@ pub fn shift_right(cpu: &mut CPU, vx: u8) {
         cpu.vf_reg = 0;
     }
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vx as usize] >> 1;
-    cpu.pc_reg += 1;
 }
 
 /// 8xy7 - SUBN Vx, Vy
@@ -217,8 +295,9 @@ pub fn sub_yx(cpu: &mut CPU, vx: u8, vy: u8) {
     } else {
         cpu.vf_reg = 0;
     }
-    cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] - cpu.gp_regs[vx as usize];
-    cpu.pc_reg += 1;
+    let temp_y = cpu.gp_regs[vy as usize];
+    let mut diff = temp_y.overflowing_sub(cpu.gp_regs[vy as usize]).0;
+    cpu.gp_regs[vx as usize] = diff;
 }
 
 /// 8xyE - SHL Vx {, Vy}
@@ -233,7 +312,6 @@ pub fn shift_left(cpu: &mut CPU, vx: u8) {
         cpu.vf_reg = 0;
     }
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vx as usize] << 1;
-    cpu.pc_reg += 1;
 }
 
 /// 9xy0 - SNE Vx, Vy
@@ -244,8 +322,6 @@ pub fn shift_left(cpu: &mut CPU, vx: u8) {
 pub fn skip_not_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     if cpu.gp_regs[vx as usize] != cpu.gp_regs[vy as usize] {
         cpu.pc_reg += 2;
-    } else {
-        cpu.pc_reg += 1;
     }
 }
 
@@ -255,7 +331,6 @@ pub fn skip_not_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
 /// The value of register I is set to nnn.
 pub fn load_i(cpu: &mut CPU, nnn: u16) {
     cpu.i_reg = nnn;
-    cpu.pc_reg += 1;
 }
 
 /// Bnnn - JP V0, addr
@@ -273,7 +348,6 @@ pub fn jump_v0(cpu: &mut CPU, nnn: u16) {
 /// The results are stored in Vx. See instruction 8xy2 for more information on AND.
 pub fn rand(cpu: &mut CPU, vx: u8, kk: u8) {
     cpu.gp_regs[vx as usize] = rand::random::<u8>() & kk;
-    cpu.pc_reg += 1;
 }
 
 /// Dxyn - DRW Vx, Vy, nibble
@@ -289,7 +363,8 @@ pub fn rand(cpu: &mut CPU, vx: u8, kk: u8) {
 pub fn draw(cpu: &mut CPU, vx: u8, vy: u8, n: u8) {
     let x_coord = cpu.gp_regs[vx as usize] as i32;
     let y_coord = cpu.gp_regs[vy as usize] as i32;
-    let sprite_slice: &[u8] = &cpu.mem.mem[cpu.i_reg as usize..=n as usize];
+    let sprite_addr = cpu.i_reg as usize;
+    let sprite_slice: &[u8] = &cpu.mem.mem[sprite_addr..sprite_addr + n as usize];
     let collision = cpu
         .display_buffer
         .write_sprite(x_coord, y_coord, sprite_slice);
@@ -298,7 +373,6 @@ pub fn draw(cpu: &mut CPU, vx: u8, vy: u8, n: u8) {
     } else {
         cpu.vf_reg = 0;
     }
-    cpu.pc_reg += 1;
 }
 /// Ex9E - SKP Vx
 /// Skip next instruction if key with the value of Vx is pressed.
@@ -308,8 +382,6 @@ pub fn draw(cpu: &mut CPU, vx: u8, vy: u8, n: u8) {
 pub fn skip_if_key(cpu: &mut CPU, vx: u8) {
     if cpu.keyboard.is_pressed(cpu.gp_regs[vx as usize]) {
         cpu.pc_reg += 2;
-    } else {
-        cpu.pc_reg += 1;
     }
 }
 
@@ -321,8 +393,6 @@ pub fn skip_if_key(cpu: &mut CPU, vx: u8) {
 pub fn skip_not_key(cpu: &mut CPU, vx: u8) {
     if cpu.keyboard.is_pressed(cpu.gp_regs[vx as usize]) == false {
         cpu.pc_reg += 2;
-    } else {
-        cpu.pc_reg += 1;
     }
 }
 
@@ -332,7 +402,6 @@ pub fn skip_not_key(cpu: &mut CPU, vx: u8) {
 /// The value of DT is placed into Vx.
 pub fn load_delay_to_vx(cpu: &mut CPU, vx: u8) {
     cpu.gp_regs[vx as usize] = cpu.delay_reg;
-    cpu.pc_reg += 1;
 }
 
 /// Fx0A - LD Vx, K
@@ -349,7 +418,6 @@ pub fn wait_for_key(cpu: &mut CPU, vx: u8) {
         }
     }
     cpu.gp_regs[vx as usize] = key;
-    cpu.pc_reg += 1;
 }
 
 /// Fx15 - LD DT, Vx
@@ -358,7 +426,6 @@ pub fn wait_for_key(cpu: &mut CPU, vx: u8) {
 /// DT is set equal to the value of Vx.
 pub fn load_delay_timer(cpu: &mut CPU, vx: u8) {
     cpu.delay_reg = cpu.gp_regs[vx as usize];
-    cpu.pc_reg += 1;
 }
 
 /// Fx18 - LD ST, Vx
@@ -367,7 +434,6 @@ pub fn load_delay_timer(cpu: &mut CPU, vx: u8) {
 /// ST is set equal to the value of Vx.
 pub fn load_sound_timer(cpu: &mut CPU, vx: u8) {
     cpu.sound_reg = cpu.gp_regs[vx as usize];
-    cpu.pc_reg += 1;
 }
 
 /// Fx1E - ADD I, Vx
@@ -376,7 +442,6 @@ pub fn load_sound_timer(cpu: &mut CPU, vx: u8) {
 /// The values of I and Vx are added, and the results are stored in I.
 pub fn add_i_vx(cpu: &mut CPU, vx: u8) {
     cpu.i_reg = cpu.i_reg + cpu.gp_regs[vx as usize] as u16;
-    cpu.pc_reg += 1;
 }
 
 /// Fx29 - LD F, Vx
@@ -386,7 +451,6 @@ pub fn add_i_vx(cpu: &mut CPU, vx: u8) {
 /// Vx. See section 2.4, Display, for more information on the Chip-8 hexadecimal font.
 pub fn load_ascii_address(cpu: &mut CPU, vx: u8) {
     cpu.i_reg = cpu.gp_regs[vx as usize] as u16 * 5;
-    cpu.pc_reg += 1;
 }
 
 /// Fx33 - LD B, Vx
@@ -399,7 +463,6 @@ pub fn load_bcd(cpu: &mut CPU, vx: u8) {
     cpu.mem.mem[cpu.i_reg as usize] = val / 100;
     cpu.mem.mem[(cpu.i_reg + 1) as usize] = (val % 100) / 10;
     cpu.mem.mem[(cpu.i_reg + 2) as usize] = val % 10;
-    cpu.pc_reg += 1;
 }
 
 /// Fx55 - LD [I], Vx
@@ -412,7 +475,6 @@ pub fn store_regs(cpu: &mut CPU, vx: u8) {
     for (index, val) in regs.iter().enumerate() {
         cpu.mem.mem[cpu.i_reg as usize + index] = *val;
     }
-    cpu.pc_reg += 1;
 }
 
 /// Fx65 - LD Vx, [I]
@@ -423,5 +485,4 @@ pub fn load_regs(cpu: &mut CPU, vx: u8) {
     for n in 0..=vx {
         cpu.gp_regs[n as usize] = cpu.mem.mem[cpu.i_reg as usize + n as usize];
     }
-    cpu.pc_reg += 1;
 }
