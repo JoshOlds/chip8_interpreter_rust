@@ -1,5 +1,6 @@
 use crate::cpu::CPU;
 
+use rand::prelude::*;
 /// Documentation pulled from CowGod's CHIP-8 Reference page
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 ///
@@ -25,12 +26,14 @@ pub fn sys(_nnn: u16) {
 /// Clear the display.
 pub fn cls(cpu: &mut CPU) {
     cpu.display_buffer.clear();
+    cpu.pc_reg += 1;
 }
 
 ///00EE - RET
 /// Return from a subroutine.
 ///
-/// The interpreter sets the program counter to the address at the top of the stack, then subtracts 1 from the stack pointer.
+/// The interpreter sets the program counter to the address at the top of the stack, then subtracts
+/// 1 from the stack pointer.
 pub fn ret(cpu: &mut CPU) {
     cpu.pc_reg = cpu.stack[cpu.stack_pointer_reg as usize];
     cpu.stack_pointer_reg -= 1;
@@ -47,7 +50,8 @@ pub fn jump(cpu: &mut CPU, nnn: u16) {
 /// 2nnn - CALL addr
 /// Call subroutine at nnn.
 ///
-/// The interpreter increments the stack pointer, then puts the current PC on the top of the stack. The PC is then set to nnn.
+/// The interpreter increments the stack pointer, then puts the current PC on the top of the stack.
+/// The PC is then set to nnn.
 pub fn call(cpu: &mut CPU, nnn: u16) {
     cpu.stack_pointer_reg += 1;
     cpu.stack[cpu.stack_pointer_reg as usize] = cpu.pc_reg;
@@ -57,30 +61,39 @@ pub fn call(cpu: &mut CPU, nnn: u16) {
 /// 3xkk - SE Vx, byte
 /// Skip next instruction if Vx = kk.
 ///
-/// The interpreter compares register Vx to kk, and if they are equal, increments the program counter by 2.
+/// The interpreter compares register Vx to kk, and if they are equal, increments the program
+/// counter by 2.
 pub fn skip_equal(cpu: &mut CPU, vx: u8, kk: u8) {
     if cpu.gp_regs[vx as usize] == kk {
         cpu.pc_reg += 2;
+    } else {
+        cpu.pc_reg += 1;
     }
 }
 
 /// 4xkk - SNE Vx, byte
 /// Skip next instruction if Vx != kk.
 ///
-/// The interpreter compares register Vx to kk, and if they are not equal, increments the program counter by 2.
+/// The interpreter compares register Vx to kk, and if they are not equal, increments the program
+/// counter by 2.
 pub fn skip_not_equal(cpu: &mut CPU, vx: u8, kk: u8) {
     if cpu.gp_regs[vx as usize] != kk {
         cpu.pc_reg += 2;
+    } else {
+        cpu.pc_reg += 1;
     }
 }
 
 /// 5xy0 - SE Vx, Vy
 /// Skip next instruction if Vx = Vy.
 ///
-/// The interpreter compares register Vx to register Vy, and if they are equal, increments the program counter by 2.
+/// The interpreter compares register Vx to register Vy, and if they are equal, increments the
+/// program counter by 2.
 pub fn skip_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     if cpu.gp_regs[vx as usize] == cpu.gp_regs[vy as usize] {
         cpu.pc_reg += 2;
+    } else {
+        cpu.pc_reg += 1;
     }
 }
 
@@ -90,6 +103,7 @@ pub fn skip_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
 /// The interpreter puts the value kk into register Vx.
 pub fn load(cpu: &mut CPU, vx: u8, kk: u8) {
     cpu.gp_regs[vx as usize] = kk;
+    cpu.pc_reg += 1;
 }
 
 /// 7xkk - ADD Vx, byte
@@ -98,6 +112,7 @@ pub fn load(cpu: &mut CPU, vx: u8, kk: u8) {
 /// Adds the value kk to the value of register Vx, then stores the result in Vx.
 pub fn add(cpu: &mut CPU, vx: u8, kk: u8) {
     cpu.gp_regs[vx as usize] += kk;
+    cpu.pc_reg += 1;
 }
 
 ///8xy0 - LD Vx, Vy
@@ -106,6 +121,7 @@ pub fn add(cpu: &mut CPU, vx: u8, kk: u8) {
 /// Stores the value of register Vy in register Vx.
 pub fn load_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize];
+    cpu.pc_reg += 1;
 }
 
 ///8xy1 - OR Vx, Vy
@@ -116,6 +132,7 @@ pub fn load_xy(cpu: &mut CPU, vx: u8, vy: u8) {
 /// result is also 1. Otherwise, it is 0.
 pub fn bitwise_or(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] | cpu.gp_regs[vx as usize];
+    cpu.pc_reg += 1;
 }
 
 ///8xy2 - AND Vx, Vy
@@ -126,6 +143,7 @@ pub fn bitwise_or(cpu: &mut CPU, vx: u8, vy: u8) {
 /// result is also 1. Otherwise, it is 0.
 pub fn bitwise_and(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] & cpu.gp_regs[vx as usize];
+    cpu.pc_reg += 1;
 }
 
 /// 8xy3 - XOR Vx, Vy
@@ -136,6 +154,7 @@ pub fn bitwise_and(cpu: &mut CPU, vx: u8, vy: u8) {
 /// same, then the corresponding bit in the result is set to 1. Otherwise, it is 0.
 pub fn bitwise_xor(cpu: &mut CPU, vx: u8, vy: u8) {
     cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] ^ cpu.gp_regs[vx as usize];
+    cpu.pc_reg += 1;
 }
 
 /// 8xy4 - ADD Vx, Vy
@@ -149,9 +168,260 @@ pub fn add_xy(cpu: &mut CPU, vx: u8, vy: u8) {
     if carry {
         sum -= 255;
         cpu.vf_reg = 1;
+    } else {
+        cpu.vf_reg = 0;
     }
-    else { cpu.vf_reg = 0; }
     cpu.gp_regs[vx as usize] = sum as u8;
+    cpu.pc_reg += 1;
 }
 
+/// 8xy5 - SUB Vx, Vy
+// Set Vx = Vx - Vy, set VF = NOT borrow.
+//
+// If Vx > Vy, then VF is set to 1, otherwise 0. Then Vy is subtracted from Vx,
+// and the results stored in Vx.
+pub fn sub_xy(cpu: &mut CPU, vx: u8, vy: u8) {
+    if cpu.gp_regs[vx as usize] > cpu.gp_regs[vy as usize] {
+        cpu.vf_reg = 1;
+    } else {
+        cpu.vf_reg = 0;
+    }
+    cpu.gp_regs[vx as usize] = cpu.gp_regs[vx as usize] - cpu.gp_regs[vy as usize];
+    cpu.pc_reg += 1;
+}
+
+/// 8xy6 - SHR Vx {, Vy}
+/// Set Vx = Vx SHR 1.
 ///
+/// If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.
+/// Then Vx is divided by 2.
+///
+pub fn shift_right(cpu: &mut CPU, vx: u8) {
+    if cpu.gp_regs[vx as usize] & 0x01 > 0 {
+        cpu.vf_reg = 1;
+    } else {
+        cpu.vf_reg = 0;
+    }
+    cpu.gp_regs[vx as usize] = cpu.gp_regs[vx as usize] >> 1;
+    cpu.pc_reg += 1;
+}
+
+/// 8xy7 - SUBN Vx, Vy
+/// Set Vx = Vy - Vx, set VF = NOT borrow.
+///
+/// If Vy > Vx, then VF is set to 1, otherwise 0. Then Vx is subtracted from Vy, and the results
+/// stored in Vx.
+pub fn sub_yx(cpu: &mut CPU, vx: u8, vy: u8) {
+    if cpu.gp_regs[vy as usize] > cpu.gp_regs[vx as usize] {
+        cpu.vf_reg = 1;
+    } else {
+        cpu.vf_reg = 0;
+    }
+    cpu.gp_regs[vx as usize] = cpu.gp_regs[vy as usize] - cpu.gp_regs[vx as usize];
+    cpu.pc_reg += 1;
+}
+
+/// 8xyE - SHL Vx {, Vy}
+/// Set Vx = Vx SHL 1.
+///
+/// If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0.
+/// Then Vx is multiplied by 2.
+pub fn shift_left(cpu: &mut CPU, vx: u8) {
+    if cpu.gp_regs[vx as usize] & 0x80 > 0 {
+        cpu.vf_reg = 1;
+    } else {
+        cpu.vf_reg = 0;
+    }
+    cpu.gp_regs[vx as usize] = cpu.gp_regs[vx as usize] << 1;
+    cpu.pc_reg += 1;
+}
+
+/// 9xy0 - SNE Vx, Vy
+/// Skip next instruction if Vx != Vy.
+///
+/// The values of Vx and Vy are compared, and if they are not equal,
+/// the program counter is increased by 2.
+pub fn skip_not_equal_xy(cpu: &mut CPU, vx: u8, vy: u8) {
+    if cpu.gp_regs[vx as usize] != cpu.gp_regs[vy as usize] {
+        cpu.pc_reg += 2;
+    } else {
+        cpu.pc_reg += 1;
+    }
+}
+
+/// Annn - LD I, addr
+/// Set I = nnn.
+///
+/// The value of register I is set to nnn.
+pub fn load_i(cpu: &mut CPU, nnn: u16) {
+    cpu.i_reg = nnn;
+    cpu.pc_reg += 1;
+}
+
+/// Bnnn - JP V0, addr
+/// Jump to location nnn + V0.
+///
+/// The program counter is set to nnn plus the value of V0.
+pub fn jump_v0(cpu: &mut CPU, nnn: u16) {
+    cpu.pc_reg += cpu.gp_regs[0] as u16 + nnn;
+}
+
+/// Cxkk - RND Vx, byte
+/// Set Vx = random byte AND kk.
+///
+/// The interpreter generates a random number from 0 to 255, which is then ANDed with the value kk.
+/// The results are stored in Vx. See instruction 8xy2 for more information on AND.
+pub fn rand(cpu: &mut CPU, vx: u8, kk: u8) {
+    cpu.gp_regs[vx as usize] = rand::random::<u8>() & kk;
+    cpu.pc_reg += 1;
+}
+
+/// Dxyn - DRW Vx, Vy, nibble
+/// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+///
+/// The interpreter reads n bytes from memory, starting at the address stored in I.
+/// These bytes are then displayed as sprites on screen at coordinates (Vx, Vy).
+/// Sprites are XORed onto the existing screen. If this causes any pixels to be erased,
+/// VF is set to 1, otherwise it is set to 0. If the sprite is positioned so part of it is
+/// outside the coordinates of the display, it wraps around to the opposite side of the screen.
+/// See instruction 8xy3 for more information on XOR, and section 2.4, Display, for more information
+/// on the Chip-8 screen and sprites.
+pub fn draw(cpu: &mut CPU, vx: u8, vy: u8, n: u8) {
+    let x_coord = cpu.gp_regs[vx as usize] as i32;
+    let y_coord = cpu.gp_regs[vy as usize] as i32;
+    let sprite_slice: &[u8] = &cpu.mem.mem[cpu.i_reg as usize..=n as usize];
+    let collision = cpu
+        .display_buffer
+        .write_sprite(x_coord, y_coord, sprite_slice);
+    if collision {
+        cpu.vf_reg = 1;
+    } else {
+        cpu.vf_reg = 0;
+    }
+    cpu.pc_reg += 1;
+}
+/// Ex9E - SKP Vx
+/// Skip next instruction if key with the value of Vx is pressed.
+///
+/// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the
+/// down position, PC is increased by 2.
+pub fn skip_if_key(cpu: &mut CPU, vx: u8) {
+    if cpu.keyboard.is_pressed(cpu.gp_regs[vx as usize]) {
+        cpu.pc_reg += 2;
+    } else {
+        cpu.pc_reg += 1;
+    }
+}
+
+/// ExA1 - SKNP Vx
+/// Skip next instruction if key with the value of Vx is not pressed.
+///
+/// Checks the keyboard, and if the key corresponding to the value of Vx is currently in the
+/// up position, PC is increased by 2.
+pub fn skip_not_key(cpu: &mut CPU, vx: u8) {
+    if cpu.keyboard.is_pressed(cpu.gp_regs[vx as usize]) == false {
+        cpu.pc_reg += 2;
+    } else {
+        cpu.pc_reg += 1;
+    }
+}
+
+/// Fx07 - LD Vx, DT
+/// Set Vx = delay timer value.
+///
+/// The value of DT is placed into Vx.
+pub fn load_delay_to_vx(cpu: &mut CPU, vx: u8) {
+    cpu.gp_regs[vx as usize] = cpu.delay_reg;
+    cpu.pc_reg += 1;
+}
+
+/// Fx0A - LD Vx, K
+/// Wait for a key press, store the value of the key in Vx.
+///
+/// All execution stops until a key is pressed, then the value of that key is stored in Vx.
+pub fn wait_for_key(cpu: &mut CPU, vx: u8) {
+    let mut key: u8 = 0x0;
+    loop {
+        let keys = cpu.keyboard.get_active_inputs();
+        if keys.is_empty() == false {
+            key = keys[0].to_hex();
+            break;
+        }
+    }
+    cpu.gp_regs[vx as usize] = key;
+    cpu.pc_reg += 1;
+}
+
+/// Fx15 - LD DT, Vx
+/// Set delay timer = Vx.
+///
+/// DT is set equal to the value of Vx.
+pub fn load_delay_timer(cpu: &mut CPU, vx: u8) {
+    cpu.delay_reg = cpu.gp_regs[vx as usize];
+    cpu.pc_reg += 1;
+}
+
+/// Fx18 - LD ST, Vx
+/// Set sound timer = Vx.
+///
+/// ST is set equal to the value of Vx.
+pub fn load_sound_timer(cpu: &mut CPU, vx: u8) {
+    cpu.sound_reg = cpu.gp_regs[vx as usize];
+    cpu.pc_reg += 1;
+}
+
+/// Fx1E - ADD I, Vx
+/// Set I = I + Vx.
+///
+/// The values of I and Vx are added, and the results are stored in I.
+pub fn add_i_vx(cpu: &mut CPU, vx: u8) {
+    cpu.i_reg = cpu.i_reg + cpu.gp_regs[vx as usize] as u16;
+    cpu.pc_reg += 1;
+}
+
+/// Fx29 - LD F, Vx
+/// Set I = location of sprite for digit Vx.
+///
+/// The value of I is set to the location for the hexadecimal sprite corresponding to the value of
+/// Vx. See section 2.4, Display, for more information on the Chip-8 hexadecimal font.
+pub fn load_ascii_address(cpu: &mut CPU, vx: u8) {
+    cpu.i_reg = cpu.gp_regs[vx as usize] as u16 * 5;
+    cpu.pc_reg += 1;
+}
+
+/// Fx33 - LD B, Vx
+/// Store BCD representation of Vx in memory locations I, I+1, and I+2.
+///
+/// The interpreter takes the decimal value of Vx, and places the hundreds digit in memory at
+/// location in I, the tens digit at location I+1, and the ones digit at location I+2.
+pub fn load_bcd(cpu: &mut CPU, vx: u8) {
+    let val = cpu.gp_regs[vx as usize];
+    cpu.mem.mem[cpu.i_reg as usize] = val / 100;
+    cpu.mem.mem[(cpu.i_reg + 1) as usize] = (val % 100) / 10;
+    cpu.mem.mem[(cpu.i_reg + 2) as usize] = val % 10;
+    cpu.pc_reg += 1;
+}
+
+/// Fx55 - LD [I], Vx
+/// Store registers V0 through Vx in memory starting at location I.
+///
+/// The interpreter copies the values of registers V0 through Vx into memory,
+/// starting at the address in I.
+pub fn store_regs(cpu: &mut CPU, vx: u8) {
+    let regs = &cpu.gp_regs[0..=vx as usize];
+    for (index, val) in regs.iter().enumerate() {
+        cpu.mem.mem[cpu.i_reg as usize + index] = *val;
+    }
+    cpu.pc_reg += 1;
+}
+
+/// Fx65 - LD Vx, [I]
+/// Read registers V0 through Vx from memory starting at location I.
+///
+/// The interpreter reads values from memory starting at location I into registers V0 through Vx.
+pub fn load_regs(cpu: &mut CPU, vx: u8) {
+    for n in 0..=vx {
+        cpu.gp_regs[n as usize] = cpu.mem.mem[cpu.i_reg as usize + n as usize];
+    }
+    cpu.pc_reg += 1;
+}

@@ -30,6 +30,30 @@ pub enum ChipKeys {
     ESC,
 }
 
+impl ChipKeys {
+    pub fn to_hex(&self) -> u8 {
+        return match self {
+            ChipKeys::Key0 => 0x0,
+            ChipKeys::Key1 => 0x1,
+            ChipKeys::Key2 => 0x2,
+            ChipKeys::Key3 => 0x3,
+            ChipKeys::Key4 => 0x4,
+            ChipKeys::Key5 => 0x5,
+            ChipKeys::Key6 => 0x6,
+            ChipKeys::Key7 => 0x7,
+            ChipKeys::Key8 => 0x8,
+            ChipKeys::Key9 => 0x9,
+            ChipKeys::KeyA => 0xA,
+            ChipKeys::KeyB => 0xB,
+            ChipKeys::KeyC => 0xC,
+            ChipKeys::KeyD => 0xD,
+            ChipKeys::KeyE => 0xE,
+            ChipKeys::KeyF => 0xF,
+            ChipKeys::ESC => 0x0,
+        };
+    }
+}
+
 /// CHIP-8 Keyboard + Extra system keys
 #[derive(Default)]
 pub struct Keyboard {
@@ -136,5 +160,27 @@ impl Keyboard {
             inputs.push(ChipKeys::ESC);
         }
         inputs
+    }
+
+    pub fn is_pressed(&self, hex_key: u8) -> bool {
+        return match hex_key {
+            0x0 => self.key_0,
+            0x1 => self.key_1,
+            0x2 => self.key_2,
+            0x3 => self.key_3,
+            0x4 => self.key_4,
+            0x5 => self.key_5,
+            0x6 => self.key_6,
+            0x7 => self.key_7,
+            0x8 => self.key_8,
+            0x9 => self.key_9,
+            0xA => self.key_a,
+            0xB => self.key_b,
+            0xC => self.key_c,
+            0xD => self.key_d,
+            0xE => self.key_e,
+            0xF => self.key_f,
+            _ => false,
+        };
     }
 }
