@@ -85,9 +85,9 @@ pub fn execute(cpu: &mut CPU) -> bool {
             _ => panic!("Unsupported Instruction!"),
         },
         0xF => match to_kk(&third, &fourth) {
-            0x07 => load_delay_timer(cpu, second),
+            0x07 => load_delay_to_vx(cpu, second),
             0x0A => wait_for_key(cpu, second),
-            0x15 => load_delay_to_vx(cpu, second),
+            0x15 => load_delay_timer(cpu, second),
             0x18 => load_sound_timer(cpu, second),
             0x1E => add_i_vx(cpu, second),
             0x29 => load_ascii_address(cpu, second),
@@ -408,16 +408,16 @@ pub fn load_delay_to_vx(cpu: &mut CPU, vx: u8) {
 /// Wait for a key press, store the value of the key in Vx.
 ///
 /// All execution stops until a key is pressed, then the value of that key is stored in Vx.
+/// This implementation yields on no key, but does not increment program counter
 pub fn wait_for_key(cpu: &mut CPU, vx: u8) {
     let mut key: u8 = 0x0;
-    loop {
-        let keys = cpu.keyboard.get_active_inputs();
-        if keys.is_empty() == false {
-            key = keys[0].to_hex();
-            break;
-        }
+    let keys = cpu.keyboard.get_active_inputs();
+    if keys.is_empty() == false {
+        key = keys[0].to_hex();
+        cpu.gp_regs[vx as usize] = key;
+    } else {
+        cpu.pc_reg -= 2;
     }
-    cpu.gp_regs[vx as usize] = key;
 }
 
 /// Fx15 - LD DT, Vx

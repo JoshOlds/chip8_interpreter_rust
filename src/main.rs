@@ -18,8 +18,9 @@ use crate::display::crossterm_display::CrosstermDisplay;
 // Concrete Inputs
 use crate::input::crossterm_input::CrosstermInput;
 use crate::input::ChipKeys::Key5;
+use std::ops::Sub;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn main() {
     //keyboard_test()
@@ -31,10 +32,12 @@ fn main() {
     cpu.mem.load_ascii_fonts();
 
     //rom_loader::load_rom_file(&mut cpu, "roms/IBM_Logo.ch8").unwrap();
-    rom_loader::load_rom_file(&mut cpu, "roms/test_opcode.ch8").unwrap();
+    //rom_loader::load_rom_file(&mut cpu, "roms/test_opcode.ch8").unwrap();
+    rom_loader::load_rom_file(&mut cpu, "roms/delay_timer_test.ch8").unwrap();
     cpu.pc_reg = 0x200;
 
     loop {
+        let start_time = Instant::now();
         system_input.update(&mut cpu.keyboard);
         if cpu.keyboard.esc {
             return;
@@ -42,6 +45,15 @@ fn main() {
         if instructions::execute(&mut cpu) {
             display.draw(&cpu.display_buffer);
         }
+        cpu.update_time_registers();
+
+        // rate limit to ~500hz
+        let elapsed = start_time.elapsed();
+        let sleep_time = match Duration::from_millis(2).checked_sub(elapsed) {
+            Some(dur) => dur,
+            None => Duration::default(),
+        };
+        sleep(sleep_time);
     }
 }
 
